@@ -67,6 +67,8 @@ client.on('interactionCreate', async (interaction) => {
       
       await interaction.editReply(`Chat session started! Continue the conversation in ${thread}`);
       
+      const statusMessage = await thread.send('🔄 Sending data to n8n workflow...');
+      
       const webhookData = {
         sessionId: sessionId,
         threadId: thread.id,
@@ -77,19 +79,43 @@ client.on('interactionCreate', async (interaction) => {
         type: 'session_start'
       };
       
-      const response = await axios.post(process.env.N8N_WEBHOOK_URL, webhookData, {
-        headers: {
-          'Content-Type': 'application/json'
+      try {
+        const response = await axios.post(process.env.N8N_WEBHOOK_URL, webhookData, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 30000
+        });
+        
+        await statusMessage.delete();
+        
+        if (response.data && response.data.message) {
+          await thread.send(response.data.message);
+        } else {
+          await thread.send('✅ Connected to n8n workflow. Waiting for response...');
         }
-      });
-      
-      if (response.data && response.data.message) {
-        await thread.send(response.data.message);
+        
+      } catch (webhookError) {
+        await statusMessage.delete();
+        console.error('Error calling n8n webhook:', webhookError.message);
+        
+        let errorMessage = '❌ Failed to connect to n8n workflow.\n';
+        if (webhookError.code === 'ECONNREFUSED') {
+          errorMessage += 'The webhook URL is not accessible.';
+        } else if (webhookError.response) {
+          errorMessage += `Error: ${webhookError.response.status} ${webhookError.response.statusText}`;
+        } else if (webhookError.request) {
+          errorMessage += 'No response received from n8n.';
+        } else {
+          errorMessage += `Error: ${webhookError.message}`;
+        }
+        
+        await thread.send(errorMessage);
       }
       
     } catch (error) {
-      console.error('Error starting chat session:', error);
-      await interaction.editReply('Failed to start chat session. Please try again.');
+      console.error('Error creating chat session:', error);
+      await interaction.editReply('Failed to create chat session. Please try again.');
     }
   }
 });
@@ -102,6 +128,8 @@ client.on('messageCreate', async (message) => {
   const session = activeSessions.get(sessionId);
   
   if (!session) return;
+  
+  const statusMessage = await message.channel.send('🔄 Processing your message...');
   
   try {
     const webhookData = {
@@ -117,16 +145,34 @@ client.on('messageCreate', async (message) => {
     const response = await axios.post(process.env.N8N_WEBHOOK_URL, webhookData, {
       headers: {
         'Content-Type': 'application/json'
-      }
+      },
+      timeout: 30000
     });
+    
+    await statusMessage.delete();
     
     if (response.data && response.data.message) {
       await message.channel.send(response.data.message);
+    } else {
+      await message.channel.send('✅ Message sent to n8n workflow.');
     }
     
   } catch (error) {
-    console.error('Error forwarding message to n8n:', error);
-    await message.channel.send('Sorry, I encountered an error processing your message.');
+    await statusMessage.delete();
+    console.error('Error forwarding message to n8n:', error.message);
+    
+    let errorMessage = '❌ Failed to process your message.\n';
+    if (error.code === 'ECONNREFUSED') {
+      errorMessage += 'The n8n webhook is not accessible.';
+    } else if (error.response) {
+      errorMessage += `Error: ${error.response.status} ${error.response.statusText}`;
+    } else if (error.request) {
+      errorMessage += 'No response received from n8n.';
+    } else {
+      errorMessage += `Error: ${error.message}`;
+    }
+    
+    await message.channel.send(errorMessage);
   }
 });
 
