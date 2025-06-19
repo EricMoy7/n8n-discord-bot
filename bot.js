@@ -57,7 +57,7 @@ client.on('interactionCreate', async (interaction) => {
         reason: 'New n8n chat session'
       });
       
-      const sessionId = `${interaction.guildId}-${thread.id}`;
+      const sessionId = thread.id;
       activeSessions.set(sessionId, {
         threadId: thread.id,
         userId: interaction.user.id,
@@ -124,7 +124,7 @@ client.on('messageCreate', async (message) => {
   if (message.author.bot) return;
   if (!message.channel.isThread()) return;
   
-  const sessionId = `${message.guildId}-${message.channelId}`;
+  const sessionId = message.channelId;
   const session = activeSessions.get(sessionId);
   
   if (!session) return;
@@ -177,7 +177,7 @@ client.on('messageCreate', async (message) => {
 });
 
 client.on('threadDelete', (thread) => {
-  const sessionId = `${thread.guildId}-${thread.id}`;
+  const sessionId = thread.id;
   if (activeSessions.has(sessionId)) {
     activeSessions.delete(sessionId);
     console.log(`Session ${sessionId} ended`);
