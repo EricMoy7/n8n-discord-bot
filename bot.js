@@ -130,85 +130,10 @@ client.on('messageCreate', async (message) => {
   
   if (!session) return;
   
-  // Check if message contains a voice attachment
-  if (message.attachments.size > 0) {
-    console.log('Attachments found:', message.attachments.map(att => ({
-      name: att.name,
-      contentType: att.contentType,
-      url: att.url
-    })));
-    
-    const voiceAttachment = message.attachments.find(att => {
-      // Check content type
-      if (att.contentType && (att.contentType.startsWith('audio/') || att.contentType === 'video/mp4')) {
-        return true;
-      }
-      // Check file extension for common audio formats
-      const audioExtensions = ['.mp3', '.m4a', '.wav', '.ogg', '.webm', '.opus'];
-      return audioExtensions.some(ext => att.name.toLowerCase().endsWith(ext));
-    });
-    
-    if (voiceAttachment) {
-      console.log('Voice attachment detected:', voiceAttachment.name, voiceAttachment.contentType);
-      const statusMessage = await message.channel.send('🎤 Processing voice message...');
-      
-      try {
-        const webhookData = {
-          sessionId: sessionId,
-          threadId: message.channelId,
-          userId: message.author.id,
-          username: message.author.username,
-          voiceUrl: voiceAttachment.url,
-          fileName: voiceAttachment.name,
-          fileSize: voiceAttachment.size,
-          contentType: voiceAttachment.contentType,
-          timestamp: new Date().toISOString(),
-          type: 'voice_message'
-        };
-        
-        const response = await axios.post(process.env.N8N_VOICE_WEBHOOK_URL || 'https://n8n.airzm.com/webhook/discord-hook', webhookData, {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          timeout: 60000
-        });
-        
-        await statusMessage.delete();
-        
-        if (response.data && response.data.message) {
-          await message.channel.send(response.data.message);
-        } else if (response.data && response.data.transcription) {
-          await message.channel.send(`📝 Transcription: ${response.data.transcription}`);
-        } else {
-          await message.channel.send('✅ Voice message sent for processing.');
-        }
-        
-      } catch (error) {
-        await statusMessage.delete();
-        console.error('Error calling voice webhook:', error.message);
-        
-        let errorMessage = '❌ Failed to process voice message.\n';
-        if (error.code === 'ECONNREFUSED') {
-          errorMessage += 'The voice webhook URL is not accessible.';
-        } else if (error.response) {
-          errorMessage += `Error: ${error.response.status} ${error.response.statusText}`;
-        } else if (error.request) {
-          errorMessage += 'No response received from n8n.';
-        } else {
-          errorMessage += `Error: ${error.message}`;
-        }
-        
-        await message.channel.send(errorMessage);
-      }
-      
-      return;
-    }
-  }
-  
-  // Handle regular text messages
   const statusMessage = await message.channel.send('🔄 Processing your message...');
   
   try {
+    // Build webhook data with text content
     const webhookData = {
       sessionId: sessionId,
       threadId: message.channelId,
@@ -219,11 +144,36 @@ client.on('messageCreate', async (message) => {
       type: 'message'
     };
     
+    // Check for attachments and add them to the payload
+    if (message.attachments.size > 0) {
+      webhookData.attachments = message.attachments.map(att => ({
+        url: att.url,
+        name: att.name,
+        size: att.size,
+        contentType: att.contentType,
+        id: att.id
+      }));
+      
+      // Check if any attachment is likely a voice memo
+      const hasVoiceAttachment = message.attachments.some(att => {
+        if (att.contentType && (att.contentType.startsWith('audio/') || att.contentType === 'video/mp4')) {
+          return true;
+        }
+        const audioExtensions = ['.mp3', '.m4a', '.wav', '.ogg', '.webm', '.opus'];
+        return audioExtensions.some(ext => att.name.toLowerCase().endsWith(ext));
+      });
+      
+      if (hasVoiceAttachment) {
+        webhookData.hasVoice = true;
+        await statusMessage.edit('🎤 Processing voice message...');
+      }
+    }
+    
     const response = await axios.post(process.env.N8N_WEBHOOK_URL, webhookData, {
       headers: {
         'Content-Type': 'application/json'
       },
-      timeout: 30000
+      timeout: 60000
     });
     
     await statusMessage.delete();
