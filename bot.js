@@ -122,6 +122,8 @@ client.on('interactionCreate', async (interaction) => {
 });
 
 client.on('messageCreate', async (message) => {
+  console.log(`[DEBUG] Message event - Author: ${message.author.username}, Bot: ${message.author.bot}, Channel Type: ${message.channel.type}, Is Thread: ${message.channel.isThread()}`);
+  
   if (message.author.bot) return;
   if (!message.channel.isThread()) return;
   
