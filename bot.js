@@ -166,7 +166,7 @@ client.on('messageCreate', async (message) => {
           type: 'voice_message'
         };
         
-        const response = await axios.post(process.env.N8N_VOICE_WEBHOOK_URL || 'https://n8n.airzm.com/webhook/discord-voice', webhookData, {
+        const response = await axios.post(process.env.N8N_VOICE_WEBHOOK_URL || 'https://n8n.airzm.com/webhook/discord-hook', webhookData, {
           headers: {
             'Content-Type': 'application/json'
           },
