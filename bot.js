@@ -130,6 +130,8 @@ client.on('messageCreate', async (message) => {
   
   if (!session) return;
   
+  console.log(`Message received - Content: "${message.content}", Attachments: ${message.attachments.size}`);
+  
   const statusMessage = await message.channel.send('🔄 Processing your message...');
   
   try {
@@ -146,6 +148,11 @@ client.on('messageCreate', async (message) => {
     
     // Check for attachments and add them to the payload
     if (message.attachments.size > 0) {
+      console.log('Processing attachments:', message.attachments.map(att => ({
+        name: att.name,
+        contentType: att.contentType,
+        url: att.url
+      })));
       webhookData.attachments = message.attachments.map(att => ({
         url: att.url,
         name: att.name,
@@ -165,9 +172,12 @@ client.on('messageCreate', async (message) => {
       
       if (hasVoiceAttachment) {
         webhookData.hasVoice = true;
+        webhookData.type = 'voice_message';
         await statusMessage.edit('🎤 Processing voice message...');
       }
     }
+    
+    console.log('Sending webhook data:', JSON.stringify(webhookData, null, 2));
     
     const response = await axios.post(process.env.N8N_WEBHOOK_URL, webhookData, {
       headers: {
