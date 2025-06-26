@@ -5,7 +5,8 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.MessageContent,
+    GatewayIntentBits.GuildVoiceStates
   ]
 });
 
@@ -129,6 +130,69 @@ client.on('messageCreate', async (message) => {
   
   if (!session) return;
   
+  // Check if message contains a voice attachment
+  if (message.attachments.size > 0) {
+    const voiceAttachment = message.attachments.find(att => 
+      att.contentType && att.contentType.startsWith('audio/')
+    );
+    
+    if (voiceAttachment) {
+      const statusMessage = await message.channel.send('🎤 Processing voice message...');
+      
+      try {
+        const webhookData = {
+          sessionId: sessionId,
+          threadId: message.channelId,
+          userId: message.author.id,
+          username: message.author.username,
+          voiceUrl: voiceAttachment.url,
+          fileName: voiceAttachment.name,
+          fileSize: voiceAttachment.size,
+          contentType: voiceAttachment.contentType,
+          timestamp: new Date().toISOString(),
+          type: 'voice_message'
+        };
+        
+        const response = await axios.post(process.env.N8N_VOICE_WEBHOOK_URL || 'https://n8n.airzm.com/webhook/discord-voice', webhookData, {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          timeout: 60000
+        });
+        
+        await statusMessage.delete();
+        
+        if (response.data && response.data.message) {
+          await message.channel.send(response.data.message);
+        } else if (response.data && response.data.transcription) {
+          await message.channel.send(`📝 Transcription: ${response.data.transcription}`);
+        } else {
+          await message.channel.send('✅ Voice message sent for processing.');
+        }
+        
+      } catch (error) {
+        await statusMessage.delete();
+        console.error('Error calling voice webhook:', error.message);
+        
+        let errorMessage = '❌ Failed to process voice message.\n';
+        if (error.code === 'ECONNREFUSED') {
+          errorMessage += 'The voice webhook URL is not accessible.';
+        } else if (error.response) {
+          errorMessage += `Error: ${error.response.status} ${error.response.statusText}`;
+        } else if (error.request) {
+          errorMessage += 'No response received from n8n.';
+        } else {
+          errorMessage += `Error: ${error.message}`;
+        }
+        
+        await message.channel.send(errorMessage);
+      }
+      
+      return;
+    }
+  }
+  
+  // Handle regular text messages
   const statusMessage = await message.channel.send('🔄 Processing your message...');
   
   try {
