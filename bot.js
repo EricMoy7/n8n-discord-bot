@@ -132,11 +132,24 @@ client.on('messageCreate', async (message) => {
   
   // Check if message contains a voice attachment
   if (message.attachments.size > 0) {
-    const voiceAttachment = message.attachments.find(att => 
-      att.contentType && att.contentType.startsWith('audio/')
-    );
+    console.log('Attachments found:', message.attachments.map(att => ({
+      name: att.name,
+      contentType: att.contentType,
+      url: att.url
+    })));
+    
+    const voiceAttachment = message.attachments.find(att => {
+      // Check content type
+      if (att.contentType && (att.contentType.startsWith('audio/') || att.contentType === 'video/mp4')) {
+        return true;
+      }
+      // Check file extension for common audio formats
+      const audioExtensions = ['.mp3', '.m4a', '.wav', '.ogg', '.webm', '.opus'];
+      return audioExtensions.some(ext => att.name.toLowerCase().endsWith(ext));
+    });
     
     if (voiceAttachment) {
+      console.log('Voice attachment detected:', voiceAttachment.name, voiceAttachment.contentType);
       const statusMessage = await message.channel.send('🎤 Processing voice message...');
       
       try {
